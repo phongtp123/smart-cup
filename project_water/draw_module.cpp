@@ -7,6 +7,9 @@
 // Khởi tạo U8g2 với driver SH1106, dùng chân I2C mặc định (SDA = A4, SCL = A5)
 U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
+// Khởi tạo HX711
+HX711 scale;
+
 // '_a_frm0,80', 50x50px
 const unsigned char buck_frm0_80 [] PROGMEM = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
@@ -1750,6 +1753,8 @@ const unsigned char* buck_allArray[8] = {
 };
 
 int weight = 0;
+int lastweight = 0;
+int steadyweight = 0;
 int progress = 0;
 int checkpoint_1 = 0;
 int checkpoint_2 = 345;
@@ -1768,6 +1773,11 @@ bool infinity_plan = false;
 bool pressedmenu = false;
 int temp = 0;
 bool firstday = true;
+bool start = false;
+int currT = 0; 
+int lastT = 0;
+bool pourDone = false;
+bool drinkDone = false;
 
 tmElements_t tm;
 
@@ -1804,52 +1814,93 @@ bool getDate(const char *str)
   return true;
 }
 
+unsigned int round_number_for_scale(float number) {
+  unsigned int result;
+
+  number *= -1; 
+
+  
+  if (number < 1) { 
+    number = 0; 
+  } else {
+    number = (unsigned int)round(number); 
+  }
+
+  result = number; 
+
+  return result; 
+}
+
 // Hàm xử lí tín hiệu cảm ứng đầu vào
 void handleInput() {
-  if (touchRead(4) < 10) { 
-    Serial.println("Touch detected on GPIO 4"); 
+  int menuState = digitalRead(SENSOR_MENU);
+  int touchLeftState = digitalRead(SENSOR_LEFT);
+  int touchRightState = digitalRead(SENSOR_RIGHT);
+  int touchEnterState = digitalRead(SENSOR_ENTER);
+  int onState = digitalRead(SENSOR_ON);
+  int tSensor = digitalRead(STATUS_SENSOR_PIN);
+
+  if (onState == HIGH) { 
+    Serial.println("On sensor detected"); 
     delay(1000);
+    start = true;
     mode = 0;  // Hiển thị cốc rỗng
   }
-  if (touchRead(2) < 10) {
-    Serial.println("Touch detected on GPIO 2");
-    delay(1000);  
-    mode = 1;  // Đổ nước
-    drawOnce = false;
+  if (tSensor == LOW && start == true) {
+    currT = millis();
+    weight = round_number_for_scale(scale.get_units(1));   
+    if(weight > lastweight && weight - lastweight > 20) {
+      lastweight = weight;
+      pourDone = true;
+      mode = 1;  // Đổ nước vào
+      drawOnce = false;
+    }
+    if(weight == lastweight && currT - lastT > 2000 && pourDone == true) {
+      lastT = currT;
+      drinkDone = false;
+      mode = 3;  // Nước cố định (Dừng đổ)
+      drawOnce = false; 
+    }
+    if(weight == lastweight && currT - lastT > 2000 && drinkDone == true) {
+      lastT = currT;
+      pourDone = false;
+      mode = 3;  // Nước cố định (Dừng uống)
+      drawOnce = false;
+    }
   }
-  if (touchRead(15) < 10) {  
-    Serial.println("Touch detected on GPIO 15");
-    delay(1000);
-    mode = 2;  // Đang uống nước
-    drawOnce = false;
+
+  if (tSensor == HIGH && start == true) {
+    weight = round_number_for_scale(scale.get_units(1));  
+    if(weight < lastweight) {
+      lastweight = weight;
+      drinkDone = true;
+      mode = 2;  // Uống nước
+      drawOnce = false;
+      
+    }
   }
-  if (touchRead(27) < 10) { 
-    Serial.println("Touch detected on GPIO 27");
-    delay(1000);
-    mode = 3;  // Dừng uống
-    drawOnce = false;
-  }
-  if (touchRead(13) < 10) { 
-    Serial.println("Touch detected on GPIO 13");
+
+  if (menuState == HIGH && start == true) { 
+    Serial.println("Open menu request detected");
     delay(1000);
     mode = 4;  // Mở menu plan
     drawOnce = false;
     pressedmenu = true;
   }
-  if (touchRead(12) < 10) { 
-    Serial.println("Touch detected on GPIO 12");
+  if (touchLeftState == HIGH && start == true) { 
+    Serial.println("Touch go left detected");
     delay(1000);
     mode = 5;  // Qua trái
     drawOnce = false;
   }
-  if (touchRead(14) < 10) { 
-    Serial.println("Touch detected on GPIO 14");
+  if (touchRightState == HIGH && start == true) { 
+    Serial.println("Touch go right detected");
     delay(1000);
     mode = 6;  // Qua phải
     drawOnce = false;
   }
-  if (touchRead(33) < 10) { 
-    Serial.println("Touch detected on GPIO 33");
+  if (touchEnterState == HIGH && start == true) { 
+    Serial.println("Touch enter detected");
     delay(1000);
     mode = 7;  // Enter
     drawOnce = false;
@@ -2356,11 +2407,12 @@ void execution(){
   if (millis() - lastActiveTime > powerSaveTime) {
     u8g2.setPowerSave(1);  // Tắt màn hình OLED sau thời gian không hoạt động
     drawOnce = false;
+    start = false;
+    pourDone = false;
+    drinkDone = false;
   }
 
   if (mode == 1) { // Lấy nước
-    step = 1;
-    weight += step;
     if (weight >= maxWeight) {
       weight = maxWeight;
     }
@@ -2368,23 +2420,17 @@ void execution(){
   }
 
   if (mode == 2) { // Uống nước
-    step = 1;
-    weight -= step;
     if (weight <= minWeight) {
       weight = minWeight;
-      mode = 3;
     }
     bin = mode;
   }
 
   if (mode == 3) { // Dừng uống
-    step = 0;
     if (bin == 1) {
-      weight += step;
       checkpoint_1 = weight;
     }
     if (bin == 2) {
-      weight -= step;
       checkpoint_2 = weight;
     }
   }
