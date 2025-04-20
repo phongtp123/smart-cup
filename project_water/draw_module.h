@@ -13,8 +13,13 @@
 #define SENSOR_ENTER 33
 #define SENSOR_ON 4
 #define STATUS_SENSOR_PIN 15
-#define LOADCELL_DOUT_PIN 21
-#define LOADCELL_SCK_PIN 22
+#define LOADCELL_DOUT_PIN 26
+#define LOADCELL_SCK_PIN 27
+// PCA9548A I2C Multiplexer address
+#define PCA9548A_ADDR 0x70
+// Define all I2C device channel connect to multiplexer
+#define OLED1_CHANNEL 3
+#define DS1307_CHANNEL 2
 
 // Khởi tạo U8g2 với driver SH1106, dùng chân I2C mặc định (SDA = A4, SCL = A5)
 extern U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2;

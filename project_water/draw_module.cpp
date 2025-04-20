@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "draw_module.h"
 
 #define font1 u8g2_font_ncenB08_tr
@@ -1831,6 +1832,13 @@ unsigned int round_number_for_scale(float number) {
   return result; 
 }
 
+// void selectMuxChannel(uint8_t channel) {
+//     Wire.beginTransmission(PCA9548A_ADDR);
+//     Wire.write(1 << channel);
+//     Wire.endTransmission();
+//     delay(10); // Small delay for stability
+// }
+
 // Hàm xử lí tín hiệu cảm ứng đầu vào
 void handleInput() {
   int menuState = digitalRead(SENSOR_MENU);
@@ -2351,6 +2359,7 @@ void plan_menu() {
 }
 
 void RTCDrop(){
+	// selectMuxChannel(DS1307_CHANNEL);
   RTC.read(tm);
 
   if (tm.Hour == 0 && tm.Minute == 0 && tm.Second == 0){
@@ -2368,6 +2377,8 @@ int bin = 0;
 const unsigned long powerSaveTime = 900000;
 
 void execution(){
+	// selectMuxChannel(OLED1_CHANNEL);
+	//Serial.print("execution!");
   if (mode == 3 && checkpoint_1 - checkpoint_2 > 10) {
 
     progress = checkpoint_1 - checkpoint_2;  // Cập nhật lượng nước đã uống
